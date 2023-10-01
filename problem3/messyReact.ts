@@ -3,27 +3,25 @@ import React, { useEffect, useState, useMemo } from 'react';
 interface WalletBalance {
   currency: string;
   amount: number;
+  blockchain: string;
 }
 
-interface FormattedWalletBalance {
-  currency: string;
-  amount: number;
+interface FormattedWalletBalance extends WalletBalance {
   formatted: string;
 }
 
-// Import useWalletBalances and WalletRow if not already imported
-
 class Datasource {
-  constructor(private url: string) {}
+  private url: string;
 
-  async getPrices() {
+  constructor(url: string) {
+    this.url = url;
+  }
+
+  async getPrices(): Promise<{ [currency: string]: number }> {
     try {
       const response = await fetch(this.url);
-      if (!response.ok) {
-        throw new Error('Failed to fetch prices');
-      }
-      const prices = await response.json();
-      return prices;
+      const data = await response.json();
+      return data;
     } catch (error) {
       console.error(error);
       throw error;
@@ -31,14 +29,14 @@ class Datasource {
   }
 }
 
+
 interface Props extends BoxProps {}
 
 const WalletPage: React.FC<Props> = (props: Props) => {
   const { children, ...rest } = props;
-  // Assuming useWalletBalances is correctly imported and used here
   const balances = useWalletBalances();
   const [prices, setPrices] = useState<Record<string, number>>({});
-
+  
   useEffect(() => {
     const datasource = new Datasource("https://interview.switcheo.com/prices.json");
     datasource.getPrices()
@@ -48,25 +46,37 @@ const WalletPage: React.FC<Props> = (props: Props) => {
       .catch(error => {
         console.error(error);
       });
-  }, [/* Add dependencies that trigger a re-fetch here if needed */]);
+  }, []);
 
-  const getPriority = (blockchain: any): number => {
+  enum ValidBlockchains {
+    Osmosis = 'Osmosis',
+    Ethereum = 'Ethereum',
+    Arbitrum = "Arbitrum",
+    Zilliqa = 'Zilliqa',
+    Neo = 'Neo',
+  }
+
+  type Blockchain = ValidBlockchains | string;
+
+
+  const getPriority = (blockchain: Blockchain): number => {
     switch (blockchain) {
-      case 'Osmosis':
+      case ValidBlockchains.Osmosis:
         return 100;
-      case 'Ethereum':
+      case ValidBlockchains.Ethereum:
         return 50;
-      case 'Arbitrum':
+      case ValidBlockchains.Arbitrum:
         return 30;
-      case 'Zilliqa':
+      case ValidBlockchains.Zilliqa:
         return 20;
-      case 'Neo':
+      case ValidBlockchains.Neo:
         return 20;
       default:
         return -99;
     }
   }
 
+ 
   const sortedBalances = useMemo(() => {
     return balances.filter((balance: WalletBalance) => {
       const balancePriority = getPriority(balance.blockchain);
@@ -86,24 +96,30 @@ const WalletPage: React.FC<Props> = (props: Props) => {
     });
   }, [balances, prices]);
 
-  // Assuming WalletRow and classes are correctly imported and used here
 
-  const rows = sortedBalances.map((balance: FormattedWalletBalance, index: number) => {
+  const balanceRows = sortedBalances.map((balance: FormattedWalletBalance, index: number) => {
     const usdValue = prices[balance.currency] * balance.amount;
+
+    const formattedBalance: FormattedWalletBalance = {
+      ...balance,
+      formatted: balance.amount.toFixed(),
+    };
+
     return (
-      <WalletRow 
-        className={classes.row}
+      <WalletRow
+        className={classes.row} 
         key={index}
-        amount={balance.amount}
+        amount={formattedBalance.amount}
         usdValue={usdValue}
-        formattedAmount={balance.formatted}
+        formattedAmount={formattedBalance.formatted}
       />
     );
   });
 
+
   return (
     <div {...rest}>
-      {rows}
+      {balanceRows} 
     </div>
   );
 }
